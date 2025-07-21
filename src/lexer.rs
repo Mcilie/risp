@@ -4,6 +4,8 @@ pub enum Token {
     Symbol(String),
     LeftParen,
     RightParen,
+    True,
+    False,
     Eof,
 }
 
@@ -76,6 +78,20 @@ impl Lexer {
             Some(ch) if ch.is_ascii_digit() => {
                 let number = self.read_number();
                 Token::Number(number)
+            }
+            Some(ch) if ch == '#' => {
+                self.advance();
+                match self.curr_char {
+                    Some('t') => {
+                        self.advance();
+                        Token::True
+                    }
+                    Some('f') => {
+                        self.advance();
+                        Token::False
+                    }
+                    _ => panic!("Invalid boolean formation"),
+                }
             }
             Some(ch) if ch.is_alphabetic() || "+-*/=<>?!&".contains(ch) => {
                 let symbol = self.read_symbol();

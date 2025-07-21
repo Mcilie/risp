@@ -5,6 +5,7 @@ pub enum Expr {
     Number(i32),
     Symbol(String),  // +, -, foo, bar
     List(Vec<Expr>), // (+ 1 2), (foo bar baz)
+    Boolean(bool),
 }
 
 pub struct Parser {
@@ -31,6 +32,14 @@ impl Parser {
                 let num = *n;
                 self.advance();
                 Expr::Number(num)
+            }
+            Token::True => {
+                self.advance();
+                Expr::Boolean(true)
+            }
+            Token::False => {
+                self.advance();
+                Expr::Boolean(false)
             }
             Token::Symbol(s) => {
                 let symbol = s.clone();
