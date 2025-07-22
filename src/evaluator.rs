@@ -1,4 +1,5 @@
 use std::io::IsTerminal;
+use std::rc::Rc;
 
 use crate::{env::Environment, parser::Expr, value::Value};
 
@@ -9,7 +10,7 @@ fn is_truthy(value: &Value) -> bool {
     }
 }
 
-pub fn risp_eval(expr: &Expr, env: &mut Environment) -> Value {
+pub fn risp_eval(expr: &Expr, env: &Rc<Environment>) -> Value {
     match expr {
         // Step 1: Fix number case - wrap in Value::Int
         Expr::Number(n) => Value::Int(*n),
@@ -17,7 +18,7 @@ pub fn risp_eval(expr: &Expr, env: &mut Environment) -> Value {
         Expr::Boolean(b) => Value::Bool(*b),
         // Step 2: Fix symbol case - look up in environment
         Expr::Symbol(name) => match env.get(name) {
-            Some(value) => value.clone(),
+            Some(value) => value,
             None => panic!("Unbound variable: {}", name),
         },
 
@@ -43,6 +44,29 @@ pub fn risp_eval(expr: &Expr, env: &mut Environment) -> Value {
 
                         env.set(variable_name, value.clone());
                         value
+                    }
+                    "lambda" => {
+                        if args.len() != 2 {
+                            panic!("lambda requires 2 arguments");
+                        }
+                        let params = match &args[0] {
+                            Expr::List(params) => {
+                                let mut params_list = Vec::new();
+                                for param in params {
+                                    match param {
+                                        Expr::Symbol(name) => params_list.push(name.clone()),
+                                        _ => panic!("Lambda parameters must be symbols"),
+                                    }
+                                }
+                                params_list
+                            }
+                            _ => panic!("First argument to lambda must be a list"),
+                        };
+                        return Value::Lambda {
+                            params,
+                            body: args[1].clone(),
+                            env: Rc::clone(env),
+                        };
                     }
                     "if" => {
                         if args.len() < 2 || args.len() > 3 {

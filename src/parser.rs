@@ -1,6 +1,6 @@
 use crate::lexer::{Lexer, Token};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Number(i32),
     Symbol(String),  // +, -, foo, bar

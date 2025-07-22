@@ -1,13 +1,14 @@
 use risp::eval_expression;
 use risp::{env::Environment, evaluator::risp_eval, lexer::Lexer, parser::Parser, value::Value};
+use std::rc::Rc;
 
 // Helper function to test expressions that might return booleans
 fn eval_full(input: &str) -> Value {
     let lexer = Lexer::new(input.to_string());
     let mut parser = Parser::new(lexer);
     let ast = parser.parse();
-    let mut env = Environment::new();
-    risp_eval(&ast, &mut env)
+    let env = Environment::new_root();
+    risp_eval(&ast, &env)
 }
 
 #[cfg(test)]
@@ -210,14 +211,14 @@ mod variable_tests {
         let lexer = Lexer::new("(define x 10)".to_string());
         let mut parser = Parser::new(lexer);
         let ast = parser.parse();
-        let mut env = Environment::new();
-        risp_eval(&ast, &mut env);
+        let env = Environment::new_root();
+        risp_eval(&ast, &env);
 
         // Now test expressions using that variable
         let lexer = Lexer::new("(+ x 5)".to_string());
         let mut parser = Parser::new(lexer);
         let ast = parser.parse();
-        let result = risp_eval(&ast, &mut env);
+        let result = risp_eval(&ast, &env);
         assert_eq!(result, Value::Int(15));
     }
 }

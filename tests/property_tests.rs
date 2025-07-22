@@ -16,8 +16,8 @@ fn eval_full(input: &str) -> Value {
     let lexer = Lexer::new(input.to_string());
     let mut parser = Parser::new(lexer);
     let ast = parser.parse();
-    let mut env = Environment::new();
-    risp_eval(&ast, &mut env)
+    let env = Environment::new_root();
+    risp_eval(&ast, &env)
 }
 
 // Helper function to format boolean values
