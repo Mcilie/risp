@@ -1,4 +1,5 @@
 use crate::env::Environment;
+use crate::error::RispError;
 use crate::parser::Expr;
 use std::rc::Rc;
 
@@ -10,7 +11,7 @@ pub enum Value {
         body: Vec<Expr>,
         env: Rc<Environment>,
     },
-    Proc(Rc<dyn Fn(&[Value]) -> Value>),
+    Proc(Rc<dyn Fn(&[Value]) -> Result<Value, RispError>>),
 }
 
 impl std::fmt::Display for Value {

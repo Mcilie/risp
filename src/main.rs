@@ -1,30 +1,50 @@
 mod env;
+mod error;
 mod evaluator;
 mod lexer;
 mod parser;
 mod value;
 
 use env::Environment;
+use error::RispError;
 use evaluator::risp_eval;
 use lexer::Lexer;
 use parser::Parser;
 use std::rc::Rc;
 
 fn test_expression(input: &str, env: &Rc<Environment>) {
-    let lexer = Lexer::new(input.to_string());
-    let mut parser = Parser::new(lexer);
-    let asts = parser.parse();
-
-    // If it's a single expression, print with = format
-    // If it's multiple expressions, evaluate all but only show the last result
-    if asts.len() == 1 {
-        let result = risp_eval(&asts[0], env);
-        println!("{} = {}", input, result);
-    } else {
-        // Evaluate all expressions in sequence
-        let result = evaluator::risp_eval_program(&asts, env);
-        println!("{}\n=> {}", input, result);
+    let result = eval_expression_internal(input, env);
+    match result {
+        Ok(value) => {
+            // If it's a single expression, print with = format
+            // Otherwise use => format for multi-expression
+            if input.contains('\n') || input.contains(';') {
+                println!("{}\n=> {}", input, value);
+            } else {
+                println!("{} = {}", input, value);
+            }
+        }
+        Err(e) => {
+            println!("Error evaluating '{}': {}", input, e);
+        }
     }
+}
+
+fn eval_expression_internal(input: &str, env: &Rc<Environment>) -> Result<value::Value, RispError> {
+    let lexer = Lexer::new(input.to_string());
+    let mut parser = Parser::new(lexer)?;
+    let asts = parser.parse()?;
+
+    // Evaluate all expressions, returning the last one
+    if asts.is_empty() {
+        return Ok(value::Value::Bool(false));
+    }
+
+    let mut result = value::Value::Bool(false);
+    for expr in &asts {
+        result = risp_eval(expr, env)?;
+    }
+    Ok(result)
 }
 
 fn main() {

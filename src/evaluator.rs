@@ -1,10 +1,11 @@
 use std::rc::Rc;
 
-use crate::{env::Environment, parser::Expr, value::Value};
+use crate::{env::Environment, parser::Expr, value::Value, error::RispError};
 
 pub enum EvalState {
     Value(Value),                    // Final result - we're done
     Continue(Expr, Rc<Environment>), // Keep evaluating this expression in this environment
+    Error(RispError),                // Error occurred - propagate up
 }
 
 fn is_truthy(value: &Value) -> bool {
@@ -14,240 +15,253 @@ fn is_truthy(value: &Value) -> bool {
     }
 }
 
-pub fn risp_eval(expr: &Expr, env: &Rc<Environment>) -> Value {
+pub fn risp_eval(expr: &Expr, env: &Rc<Environment>) -> Result<Value, RispError> {
     let mut state = EvalState::Continue(expr.clone(), Rc::clone(env));
 
     loop {
         match state {
-            EvalState::Value(v) => return v,
+            EvalState::Value(v) => return Ok(v),
+            EvalState::Error(e) => return Err(e),
             EvalState::Continue(expr, env) => {
                 state = risp_eval_step(&expr, &env);
             }
         }
     }
 }
+
 pub fn risp_eval_step(expr: &Expr, env: &Rc<Environment>) -> EvalState {
     match expr {
-        // Step 1: Fix number case - wrap in Value::Int
         Expr::Number(n) => EvalState::Value(Value::Int(*n)),
-
         Expr::Boolean(b) => EvalState::Value(Value::Bool(*b)),
-        // Step 2: Fix symbol case - look up in environment
         Expr::Symbol(name) => match env.get(name) {
             Some(value) => EvalState::Value(value),
-            None => panic!("Unbound variable: {}", name),
+            None => EvalState::Error(RispError::UnboundVariable(name.clone())),
         },
-
         Expr::List(elements) => {
             if elements.is_empty() {
-                panic!("Cannot evaluate empty list");
+                return EvalState::Error(RispError::EmptyList);
             }
 
-            let function = &elements[0];
-            let args = &elements[1..];
-
-            // Special case: if function is a symbol, handle built-ins and special forms
-            if let Expr::Symbol(name) = function {
-                match name.as_str() {
-                    "define" => {
-                        if args.len() < 2 {
-                            panic!("Define needs var name and at least one body expression");
-                        }
-
-                        match &args[0] {
-                            Expr::List(signature) => {
-                                let (fname, params) = signature.split_first().unwrap();
-                                if !matches!(fname, Expr::Symbol(_)) {
-                                    panic!("First arg must be symbol");
-                                }
-                                let fname_str = match fname {
-                                    Expr::Symbol(name) => name.clone(),
-                                    _ => panic!("First arg must be symbol"),
-                                };
-                                let mut param_names: Vec<String> = Vec::new();
-                                for param in params {
-                                    if !matches!(param, Expr::Symbol(_)) {
-                                        panic!("Params must be symbols");
-                                    }
-                                    //extract name from &expr that is param
-                                    let name = match param {
-                                        Expr::Symbol(name) => name.clone(),
-                                        _ => panic!("Params must be symbols"),
-                                    };
-                                    param_names.push(name);
-                                }
-                                let lambda_value = Value::Lambda {
-                                    params: param_names,
-                                    body: args[1..].to_vec(),
-                                    env: Rc::clone(env),
-                                };
-                                env.set(fname_str.clone(), lambda_value.clone());
-                                EvalState::Value(lambda_value)
-                            }
-                            Expr::Symbol(name) => {
-                                // let variable_name = match &args[0] {
-                                //     Expr::Symbol(name) => name.clone(),
-                                //     _ => panic!("First argument to define must be a symbol"),
-                                // };
-                                let value = risp_eval(&args[1], env);
-
-                                env.set(name.clone(), value.clone());
-                                EvalState::Value(value)
-                            }
-                            _ => panic!("First arg must be symbol or list"),
-                        }
+            match &elements[0] {
+                Expr::Symbol(s) if s == "define" => {
+                    if elements.len() < 3 {
+                        return EvalState::Error(RispError::InvalidDefine("Define needs var name and at least one body expression".to_string()));
                     }
-                    "lambda" => {
-                        if args.len() < 2 {
-                            panic!(
-                                "lambda requires parameter list and at least one body expression"
-                            );
-                        }
-                        let params = match &args[0] {
-                            Expr::List(params) => {
-                                let mut params_list = Vec::new();
-                                for param in params {
-                                    match param {
-                                        Expr::Symbol(name) => params_list.push(name.clone()),
-                                        _ => panic!("Lambda parameters must be symbols"),
-                                    }
+
+                    match &elements[1] {
+                        Expr::List(signature) => {
+                            // Function definition: (define (foo x y) body...)
+                            if signature.is_empty() {
+                                return EvalState::Error(RispError::InvalidDefine("First arg must be symbol".to_string()));
+                            }
+                            let func_name = match &signature[0] {
+                                Expr::Symbol(name) => name.clone(),
+                                _ => return EvalState::Error(RispError::InvalidDefine("First arg must be symbol".to_string())),
+                            };
+
+                            let mut params = Vec::new();
+                            for param in &signature[1..] {
+                                match param {
+                                    Expr::Symbol(param_name) => params.push(param_name.clone()),
+                                    _ => return EvalState::Error(RispError::InvalidDefine("Params must be symbols".to_string())),
                                 }
-                                params_list
                             }
-                            _ => panic!("First argument to lambda must be a list"),
-                        };
-                        EvalState::Value(Value::Lambda {
-                            params,
-                            body: args[1..].to_vec(),
-                            env: Rc::clone(env),
-                        })
-                    }
-                    "if" => {
-                        if args.len() < 2 || args.len() > 3 {
-                            panic!("if requires 2 or 3 arguments");
-                        }
 
-                        // Evaluate condition
-                        let condition = risp_eval(&args[0], env);
-
-                        if is_truthy(&condition) {
-                            // Condition is true - evaluate "then" branch (TAIL CALL)
-                            EvalState::Continue(args[1].clone(), Rc::clone(env))
-                        } else {
-                            // Condition is false
-                            if args.len() == 3 {
-                                // Has "else" branch - evaluate it (TAIL CALL)
-                                EvalState::Continue(args[2].clone(), Rc::clone(env))
-                            } else {
-                                // No "else" branch - return #f (DIRECT VALUE)
-                                EvalState::Value(Value::Bool(false))
-                            }
-                        }
-                    }
-                    _ => match env.get(name) {
-                        Some(value) => match value {
-                            Value::Proc(proc) => {
-                                let arg_values: Vec<Value> =
-                                    args.iter().map(|arg| risp_eval(arg, env)).collect();
-                                EvalState::Value(proc(arg_values.as_slice()))
-                            }
-                            Value::Lambda {
+                            // Create lambda with body
+                            let body = elements[2..].to_vec();
+                            let lambda = Value::Lambda {
                                 params,
                                 body,
-                                env: captured_env,
-                            } => {
-                                let arg_len = args.len();
-                                if arg_len != params.len() {
-                                    panic!(
-                                        "Lambda expects {} arguments, got {}",
-                                        params.len(),
-                                        arg_len
-                                    );
+                                env: Rc::clone(env),
+                            };
+                            env.set(func_name, lambda);
+                            EvalState::Value(Value::Bool(true))
+                        }
+                        Expr::Symbol(var_name) => {
+                            // Variable definition: (define x value)
+                            let body = elements[2..].to_vec();
+                            match eval_body(&body, env) {
+                                Ok(value) => {
+                                    env.set(var_name.clone(), value);
+                                    EvalState::Value(Value::Bool(true))
                                 }
-                                let evaled_args: Vec<Value> =
-                                    args.iter().map(|arg| risp_eval(arg, env)).collect();
-                                let child_env = Environment::extend(captured_env);
-                                for (param, arg_value) in params.iter().zip(evaled_args.iter()) {
-                                    child_env.set(param.clone(), arg_value.clone());
-                                }
-                                eval_body(&body, &child_env)
+                                Err(e) => EvalState::Error(e),
                             }
-                            _ => panic!("Cannot call non-function value: {:?}", value),
-                        },
-                        None => panic!("Unbound variable: {}", name),
-                    },
+                        }
+                        _ => EvalState::Error(RispError::InvalidDefine("First arg must be symbol or list".to_string())),
+                    }
                 }
-            } else {
-                // Not a symbol - evaluate the function and handle lambda calls
-                let function_value = risp_eval(function, env);
-                match function_value {
-                    Value::Lambda {
+                Expr::Symbol(s) if s == "lambda" => {
+                    if elements.len() < 3 {
+                        return EvalState::Error(RispError::InvalidLambda("Lambda needs parameters and at least one body expression".to_string()));
+                    }
+
+                    let params = match &elements[1] {
+                        Expr::List(param_list) => {
+                            let mut params = Vec::new();
+                            for param in param_list {
+                                match param {
+                                    Expr::Symbol(param_name) => params.push(param_name.clone()),
+                                    _ => return EvalState::Error(RispError::InvalidLambda("Lambda parameters must be symbols".to_string())),
+                                }
+                            }
+                            params
+                        }
+                        _ => return EvalState::Error(RispError::InvalidLambda("First argument to lambda must be a list".to_string())),
+                    };
+
+                    let body = elements[2..].to_vec();
+                    let lambda = Value::Lambda {
                         params,
                         body,
-                        env: captured_env,
-                    } => {
-                        // Check arity
-                        if params.len() != args.len() {
-                            panic!(
-                                "Lambda expects {} arguments, got {}",
-                                params.len(),
-                                args.len()
-                            );
-                        }
-
-                        // Evaluate all arguments
-                        let arg_values: Vec<Value> =
-                            args.iter().map(|arg| risp_eval(arg, env)).collect();
-
-                        // Create child environment extending the captured environment
-                        let child_env = Environment::extend(captured_env);
-
-                        // Bind parameters to argument values
-                        for (param, arg_value) in params.iter().zip(arg_values.iter()) {
-                            child_env.set(param.clone(), arg_value.clone());
-                        }
-
-                        // Evaluate the lambda body in the child environment (TAIL CALL)
-                        eval_body(&body, &child_env)
+                        env: Rc::clone(env),
+                    };
+                    EvalState::Value(lambda)
+                }
+                Expr::Symbol(s) if s == "if" => {
+                    if elements.len() != 3 && elements.len() != 4 {
+                        return EvalState::Error(RispError::InvalidIf("if requires 2 or 3 arguments".to_string()));
                     }
-                    Value::Proc(proc) => {
-                        // Evaluate all arguments
-                        let arg_values: Vec<Value> =
-                            args.iter().map(|arg| risp_eval(arg, env)).collect();
 
-                        // Call the built-in procedure (DIRECT VALUE)
-                        EvalState::Value(proc(&arg_values))
+                    let condition = match risp_eval(&elements[1], env) {
+                        Ok(value) => value,
+                        Err(e) => return EvalState::Error(e),
+                    };
+
+                    if is_truthy(&condition) {
+                        EvalState::Continue(elements[2].clone(), Rc::clone(env))
+                    } else if elements.len() == 4 {
+                        EvalState::Continue(elements[3].clone(), Rc::clone(env))
+                    } else {
+                        EvalState::Value(Value::Bool(false))
                     }
-                    _ => panic!("Cannot call non-function value: {:?}", function_value),
+                }
+                _ => {
+                    // Function call
+                    let function_expr = &elements[0];
+                    let args = &elements[1..];
+
+                    let function_value = match risp_eval(function_expr, env) {
+                        Ok(value) => value,
+                        Err(e) => return EvalState::Error(e),
+                    };
+
+                    match function_value {
+                        Value::Proc(proc) => {
+                            // Evaluate all arguments
+                            let mut arg_values = Vec::new();
+                            for arg in args {
+                                match risp_eval(arg, env) {
+                                    Ok(value) => arg_values.push(value),
+                                    Err(e) => return EvalState::Error(e),
+                                }
+                            }
+
+                            // Call the built-in procedure and handle Result
+                            match proc(arg_values.as_slice()) {
+                                Ok(value) => EvalState::Value(value),
+                                Err(e) => EvalState::Error(e),
+                            }
+                        }
+                        Value::Lambda {
+                            params,
+                            body,
+                            env: captured_env,
+                        } => {
+                            let arg_len = args.len();
+                            if arg_len != params.len() {
+                                return EvalState::Error(RispError::ArityMismatch {
+                                    expected: params.len(),
+                                    got: arg_len,
+                                });
+                            }
+
+                            // Create new environment for function call
+                            let call_env = Environment::extend(captured_env);
+
+                            // Evaluate arguments and bind to parameters
+                            for (param, arg) in params.iter().zip(args.iter()) {
+                                let arg_value = match risp_eval(arg, env) {
+                                    Ok(value) => value,
+                                    Err(e) => return EvalState::Error(e),
+                                };
+                                call_env.set(param.clone(), arg_value);
+                            }
+
+                            // Evaluate function body with TCO
+                            eval_body_tco(&body, &call_env)
+                        }
+                        _ => EvalState::Error(RispError::NotCallable(format!("{:?}", function_value))),
+                    }
                 }
             }
         }
     }
 }
 
-// Helper function to evaluate multi-expression lambda bodies with TCO
-fn eval_body(exprs: &[Expr], env: &Rc<Environment>) -> EvalState {
+// Helper function to evaluate multiple expressions (for function bodies)
+pub fn eval_body(exprs: &[Expr], env: &Rc<Environment>) -> Result<Value, RispError> {
     if exprs.is_empty() {
-        return EvalState::Value(Value::Int(0)); // Default value for empty body
+        return Ok(Value::Bool(false)); // Empty body returns false
     }
 
-    // Evaluate all expressions except the last one normally
+    // Evaluate all but the last expression for side effects
     for expr in &exprs[..exprs.len() - 1] {
-        risp_eval(expr, env); // Side effects only, ignore result
+        risp_eval(expr, env)?; // Ignore result, just check for errors
     }
 
-    // Return the last expression as a tail call for TCO
+    // Return the value of the last expression (tail call optimization)
+    risp_eval(&exprs[exprs.len() - 1], env)
+}
+
+// TCO-aware function body evaluation that returns EvalState
+fn eval_body_tco(exprs: &[Expr], env: &Rc<Environment>) -> EvalState {
+    if exprs.is_empty() {
+        return EvalState::Value(Value::Bool(false)); // Empty body returns false
+    }
+
+    // Evaluate all but the last expression for side effects
+    for expr in &exprs[..exprs.len() - 1] {
+        match risp_eval(expr, env) {
+            Ok(_) => {}, // Ignore result, just check for errors
+            Err(e) => return EvalState::Error(e),
+        }
+    }
+
+    // Return the last expression as a continuation for proper TCO
     EvalState::Continue(exprs[exprs.len() - 1].clone(), Rc::clone(env))
 }
 
-pub fn risp_eval_program(exprs: &[Expr], env: &Rc<Environment>) -> Value {
-    if exprs.is_empty() {
-        return Value::Int(0); // Default value for empty program
-    }
+// TCO helper for direct calls without the trampoline
+pub fn risp_eval_direct(expr: &Expr, env: &Rc<Environment>) -> Result<Value, RispError> {
+    match expr {
+        Expr::Number(n) => Ok(Value::Int(*n)),
+        Expr::Boolean(b) => Ok(Value::Bool(*b)),
+        Expr::Symbol(name) => match env.get(name) {
+            Some(value) => Ok(value),
+            None => Err(RispError::UnboundVariable(name.clone())),
+        },
+        Expr::List(elements) => {
+            if elements.is_empty() {
+                return Err(RispError::EmptyList);
+            }
 
-    let mut result = Value::Int(0);
-    for expr in exprs {
-        result = risp_eval(expr, env);
+            // For direct evaluation, we handle function calls directly
+            let function_value = risp_eval_direct(&elements[0], env)?;
+            let args = &elements[1..];
+
+            match function_value {
+                Value::Proc(proc) => {
+                    let mut arg_values = Vec::new();
+                    for arg in args {
+                        arg_values.push(risp_eval_direct(arg, env)?);
+                    }
+
+                    // Call the built-in procedure and handle Result
+                    proc(&arg_values)
+                }
+                _ => Err(RispError::NotCallable(format!("{:?}", function_value))),
+            }
+        }
     }
-    result
 }

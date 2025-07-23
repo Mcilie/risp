@@ -1,3 +1,4 @@
+use crate::error::RispError;
 use crate::value::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -31,170 +32,232 @@ impl Environment {
         });
 
         // Add the + built-in procedure
-        let plus_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let plus_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             let sum = args
                 .iter()
                 .map(|arg| match arg {
-                    Value::Int(n) => *n,
-                    _ => panic!("+ requires integers"),
+                    Value::Int(n) => Ok(*n),
+                    _ => Err(RispError::InvalidArithmetic(
+                        "+ requires integers".to_string(),
+                    )),
                 })
+                .collect::<Result<Vec<_>, _>>()?
+                .iter()
                 .sum::<i64>();
-            Value::Int(sum)
+            Ok(Value::Int(sum))
         }));
         new_env.set("+".to_string(), plus_proc);
 
         // Add the - built-in procedure with support for 1 arg and many arg cases
-        let minus_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let minus_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             if args.is_empty() {
-                panic!("- requires at least 1 argument");
+                return Err(RispError::InvalidArithmetic(
+                    "- requires at least 1 argument".to_string(),
+                ));
             }
             if args.len() == 1 {
                 // Unary negation
                 match &args[0] {
-                    Value::Int(n) => Value::Int(-n),
-                    _ => panic!("- requires integer"),
+                    Value::Int(n) => Ok(Value::Int(-n)),
+                    _ => Err(RispError::InvalidArithmetic(
+                        "- requires integer".to_string(),
+                    )),
                 }
             } else {
                 let first = match &args[0] {
-                    Value::Int(n) => n,
-                    _ => panic!("- requires integers"),
+                    Value::Int(n) => *n,
+                    _ => {
+                        return Err(RispError::InvalidArithmetic(
+                            "- requires integers".to_string(),
+                        ))
+                    }
                 };
                 let rest_sum = args[1..]
                     .iter()
                     .map(|arg| match arg {
-                        Value::Int(n) => *n,
-                        _ => panic!("- requires integers"),
+                        Value::Int(n) => Ok(*n),
+                        _ => Err(RispError::InvalidArithmetic(
+                            "- requires integers".to_string(),
+                        )),
                     })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .iter()
                     .sum::<i64>();
-                Value::Int(first - rest_sum)
+                Ok(Value::Int(first - rest_sum))
             }
         }));
         new_env.set("-".to_string(), minus_proc);
 
         // Add the * built-in procedure
-        let mult_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let mult_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             let product = args
                 .iter()
                 .map(|arg| match arg {
-                    Value::Int(n) => *n,
-                    _ => panic!("* requires integers"),
+                    Value::Int(n) => Ok(*n),
+                    _ => Err(RispError::InvalidArithmetic(
+                        "* requires integers".to_string(),
+                    )),
                 })
+                .collect::<Result<Vec<_>, _>>()?
+                .iter()
                 .product::<i64>();
-            Value::Int(product)
+            Ok(Value::Int(product))
         }));
         new_env.set("*".to_string(), mult_proc);
 
         // Add the / built-in procedure
-        let div_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let div_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             if args.is_empty() {
-                panic!("/ requires at least 1 argument");
+                return Err(RispError::InvalidArithmetic(
+                    "/ requires at least 1 argument".to_string(),
+                ));
             }
             if args.len() == 1 {
                 // Unary division: reciprocal
                 match &args[0] {
                     Value::Int(n) => {
                         if *n == 0 {
-                            panic!("Division by zero");
+                            return Err(RispError::DivisionByZero);
                         }
-                        Value::Int(1 / n)
+                        Ok(Value::Int(1 / n))
                     }
-                    _ => panic!("/ requires integer"),
+                    _ => Err(RispError::InvalidArithmetic(
+                        "/ requires integer".to_string(),
+                    )),
                 }
             } else {
                 // N-ary division
                 let first = match &args[0] {
                     Value::Int(n) => *n,
-                    _ => panic!("/ requires integers"),
+                    _ => {
+                        return Err(RispError::InvalidArithmetic(
+                            "/ requires integers".to_string(),
+                        ))
+                    }
                 };
                 let mut result = first;
 
                 for arg in &args[1..] {
                     let divisor = match arg {
                         Value::Int(n) => *n,
-                        _ => panic!("/ requires integers"),
+                        _ => {
+                            return Err(RispError::InvalidArithmetic(
+                                "/ requires integers".to_string(),
+                            ))
+                        }
                     };
                     if divisor == 0 {
-                        panic!("Division by zero");
+                        return Err(RispError::DivisionByZero);
                     }
                     result = result / divisor;
                 }
-                Value::Int(result)
+                Ok(Value::Int(result))
             }
         }));
         new_env.set("/".to_string(), div_proc);
 
         // Add the = built-in procedure
-        let eq_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let eq_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             if args.len() < 2 {
-                panic!("= requires at least 2 arguments");
+                return Err(RispError::InvalidArithmetic(
+                    "= requires at least 2 arguments".to_string(),
+                ));
             }
             let first_int = match &args[0] {
                 Value::Int(n) => *n,
-                _ => panic!("= requires integers"),
+                _ => {
+                    return Err(RispError::InvalidArithmetic(
+                        "= requires integers".to_string(),
+                    ))
+                }
             };
 
             let all_equal = args[1..].iter().all(|arg| match arg {
                 Value::Int(n) => *n == first_int,
-                _ => panic!("= requires integers"),
+                _ => return false, // This will be caught by the validation below
             });
-            Value::Bool(all_equal)
+
+            // Validate all args are integers
+            for arg in &args[1..] {
+                if !matches!(arg, Value::Int(_)) {
+                    return Err(RispError::InvalidArithmetic(
+                        "= requires integers".to_string(),
+                    ));
+                }
+            }
+
+            Ok(Value::Bool(all_equal))
         }));
         new_env.set("=".to_string(), eq_proc);
 
         // Add the < built-in procedure
-        let lt_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let lt_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             if args.len() != 2 {
-                panic!("< requires exactly 2 arguments");
+                return Err(RispError::InvalidArithmetic(
+                    "< requires exactly 2 arguments".to_string(),
+                ));
             }
             let (left_int, right_int) = match (&args[0], &args[1]) {
                 (Value::Int(l), Value::Int(r)) => (*l, *r),
-                _ => panic!("< requires integers"),
+                _ => {
+                    return Err(RispError::InvalidArithmetic(
+                        "< requires integers".to_string(),
+                    ))
+                }
             };
-            Value::Bool(left_int < right_int)
+            Ok(Value::Bool(left_int < right_int))
         }));
         new_env.set("<".to_string(), lt_proc);
 
         // Add the > built-in procedure
-        let gt_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let gt_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             if args.len() != 2 {
-                panic!("> requires exactly 2 arguments");
+                return Err(RispError::InvalidArithmetic(
+                    "> requires exactly 2 arguments".to_string(),
+                ));
             }
             let (left_int, right_int) = match (&args[0], &args[1]) {
                 (Value::Int(l), Value::Int(r)) => (*l, *r),
-                _ => panic!("> requires integers"),
+                _ => {
+                    return Err(RispError::InvalidArithmetic(
+                        "> requires integers".to_string(),
+                    ))
+                }
             };
-            Value::Bool(left_int > right_int)
+            Ok(Value::Bool(left_int > right_int))
         }));
         new_env.set(">".to_string(), gt_proc);
 
         // Add the and built-in procedure
-        let and_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let and_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             for arg in args {
                 if !is_truthy(arg) {
-                    return Value::Bool(false);
+                    return Ok(Value::Bool(false));
                 }
             }
-            Value::Bool(true)
+            Ok(Value::Bool(true))
         }));
         new_env.set("and".to_string(), and_proc);
 
         // Add the or built-in procedure
-        let or_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let or_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             for arg in args {
                 if is_truthy(arg) {
-                    return Value::Bool(true);
+                    return Ok(Value::Bool(true));
                 }
             }
-            Value::Bool(false)
+            Ok(Value::Bool(false))
         }));
         new_env.set("or".to_string(), or_proc);
 
         // Add the not built-in procedure
-        let not_proc = Value::Proc(Rc::new(|args: &[Value]| -> Value {
+        let not_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
             if args.len() != 1 {
-                panic!("not expects 1 argument");
+                return Err(RispError::InvalidArithmetic(
+                    "not expects 1 argument".to_string(),
+                ));
             }
-            Value::Bool(!is_truthy(&args[0]))
+            Ok(Value::Bool(!is_truthy(&args[0])))
         }));
         new_env.set("not".to_string(), not_proc);
 

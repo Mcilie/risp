@@ -1,3 +1,5 @@
+use crate::error::RispError;
+
 #[derive(Debug)]
 pub enum Token {
     Number(i64),
@@ -71,44 +73,44 @@ impl Lexer {
         result.parse::<i64>().unwrap()
     }
 
-    pub fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Result<Token, RispError> {
         self.skip_whitespace();
 
         match self.curr_char {
             Some(ch) if ch.is_ascii_digit() => {
                 let number = self.read_number();
-                Token::Number(number)
+                Ok(Token::Number(number))
             }
             Some(ch) if ch == '#' => {
                 self.advance();
                 match self.curr_char {
                     Some('t') => {
                         self.advance();
-                        Token::True
+                        Ok(Token::True)
                     }
                     Some('f') => {
                         self.advance();
-                        Token::False
+                        Ok(Token::False)
                     }
-                    _ => panic!("Invalid boolean formation"),
+                    _ => Err(RispError::InvalidBoolean(
+                        "Expected 't' or 'f' after '#'".to_string(),
+                    )),
                 }
             }
             Some(ch) if ch.is_alphabetic() || "+-*/=<>?!&".contains(ch) => {
                 let symbol = self.read_symbol();
-                Token::Symbol(symbol)
+                Ok(Token::Symbol(symbol))
             }
             Some('(') => {
                 self.advance();
-                Token::LeftParen
+                Ok(Token::LeftParen)
             }
             Some(')') => {
                 self.advance();
-                Token::RightParen
+                Ok(Token::RightParen)
             }
-            None => Token::Eof,
-            Some(ch) => {
-                panic!("Unexpected character: {}", ch);
-            }
+            None => Ok(Token::Eof),
+            Some(ch) => Err(RispError::UnexpectedCharacter(ch)),
         }
     }
 }
