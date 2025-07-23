@@ -3,6 +3,11 @@ use std::rc::Rc;
 
 use crate::{env::Environment, parser::Expr, value::Value};
 
+pub enum EvalState {
+    Value(Value),                    // Final result - we're done
+    Continue(Expr, Rc<Environment>), // Keep evaluating this expression in this environment
+}
+
 fn is_truthy(value: &Value) -> bool {
     match value {
         Value::Bool(false) => false,
@@ -11,14 +16,26 @@ fn is_truthy(value: &Value) -> bool {
 }
 
 pub fn risp_eval(expr: &Expr, env: &Rc<Environment>) -> Value {
+    let mut state = EvalState::Continue(expr.clone(), Rc::clone(env));
+
+    loop {
+        match state {
+            EvalState::Value(v) => return v,
+            EvalState::Continue(expr, env) => {
+                state = risp_eval_step(&expr, &env);
+            }
+        }
+    }
+}
+pub fn risp_eval_step(expr: &Expr, env: &Rc<Environment>) -> EvalState {
     match expr {
         // Step 1: Fix number case - wrap in Value::Int
-        Expr::Number(n) => Value::Int(*n),
+        Expr::Number(n) => EvalState::Value(Value::Int(*n)),
 
-        Expr::Boolean(b) => Value::Bool(*b),
+        Expr::Boolean(b) => EvalState::Value(Value::Bool(*b)),
         // Step 2: Fix symbol case - look up in environment
         Expr::Symbol(name) => match env.get(name) {
-            Some(value) => value,
+            Some(value) => EvalState::Value(value),
             None => panic!("Unbound variable: {}", name),
         },
 
@@ -30,24 +47,62 @@ pub fn risp_eval(expr: &Expr, env: &Rc<Environment>) -> Value {
             let function = &elements[0];
             let args = &elements[1..];
 
-            match function {
-                Expr::Symbol(name) => match name.as_str() {
+            // Special case: if function is a symbol, handle built-ins and special forms
+            if let Expr::Symbol(name) = function {
+                match name.as_str() {
                     "define" => {
-                        if args.len() != 2 {
-                            panic!("Define needs var name and one other arg");
+                        if args.len() < 2 {
+                            panic!("Define needs var name and at least one body expression");
                         }
-                        let variable_name = match &args[0] {
-                            Expr::Symbol(name) => name.clone(),
-                            _ => panic!("First argument to define must be a symbol"),
-                        };
-                        let value = risp_eval(&args[1], env);
 
-                        env.set(variable_name, value.clone());
-                        value
+                        match &args[0] {
+                            Expr::List(signature) => {
+                                let (fname, params) = signature.split_first().unwrap();
+                                if !matches!(fname, Expr::Symbol(_)) {
+                                    panic!("First arg must be symbol");
+                                }
+                                let fname_str = match fname {
+                                    Expr::Symbol(name) => name.clone(),
+                                    _ => panic!("First arg must be symbol"),
+                                };
+                                let mut param_names: Vec<String> = Vec::new();
+                                for param in params {
+                                    if !matches!(param, Expr::Symbol(_)) {
+                                        panic!("Params must be symbols");
+                                    }
+                                    //extract name from &expr that is param
+                                    let name = match param {
+                                        Expr::Symbol(name) => name.clone(),
+                                        _ => panic!("Params must be symbols"),
+                                    };
+                                    param_names.push(name);
+                                }
+                                let lambda_value = Value::Lambda {
+                                    params: param_names,
+                                    body: args[1..].to_vec(),
+                                    env: Rc::clone(env),
+                                };
+                                env.set(fname_str.clone(), lambda_value.clone());
+                                EvalState::Value(lambda_value)
+                            }
+                            Expr::Symbol(name) => {
+                                // let variable_name = match &args[0] {
+                                //     Expr::Symbol(name) => name.clone(),
+                                //     _ => panic!("First argument to define must be a symbol"),
+                                // };
+                                let value = risp_eval(&args[1], env);
+
+                                env.set(name.clone(), value.clone());
+                                EvalState::Value(value)
+                            }
+                            _ => panic!("First arg must be symbol or list"),
+                        }
                     }
                     "lambda" => {
-                        if args.len() != 2 {
-                            panic!("lambda requires 2 arguments");
+                        if args.len() < 2 {
+                            panic!(
+                                "lambda requires parameter list and at least one body expression"
+                            );
                         }
                         let params = match &args[0] {
                             Expr::List(params) => {
@@ -62,11 +117,11 @@ pub fn risp_eval(expr: &Expr, env: &Rc<Environment>) -> Value {
                             }
                             _ => panic!("First argument to lambda must be a list"),
                         };
-                        return Value::Lambda {
+                        EvalState::Value(Value::Lambda {
                             params,
-                            body: args[1].clone(),
+                            body: args[1..].to_vec(),
                             env: Rc::clone(env),
-                        };
+                        })
                     }
                     "if" => {
                         if args.len() < 2 || args.len() > 3 {
@@ -77,181 +132,123 @@ pub fn risp_eval(expr: &Expr, env: &Rc<Environment>) -> Value {
                         let condition = risp_eval(&args[0], env);
 
                         if is_truthy(&condition) {
-                            // Condition is true - evaluate "then" branch
-                            risp_eval(&args[1], env)
+                            // Condition is true - evaluate "then" branch (TAIL CALL)
+                            EvalState::Continue(args[1].clone(), Rc::clone(env))
                         } else {
                             // Condition is false
                             if args.len() == 3 {
-                                // Has "else" branch - evaluate it
-                                risp_eval(&args[2], env)
+                                // Has "else" branch - evaluate it (TAIL CALL)
+                                EvalState::Continue(args[2].clone(), Rc::clone(env))
                             } else {
-                                // No "else" branch - return #f
-                                Value::Bool(false)
+                                // No "else" branch - return #f (DIRECT VALUE)
+                                EvalState::Value(Value::Bool(false))
                             }
                         }
                     }
-                    "and" => {
-                        for arg in args {
-                            let evaled = risp_eval(arg, env); // Evaluate one at a time
-                            if !is_truthy(&evaled) {
-                                return Value::Bool(false); // Stop immediately on first false
+                    _ => match env.get(name) {
+                        Some(value) => match value {
+                            Value::Proc(proc) => {
+                                let arg_values: Vec<Value> =
+                                    args.iter().map(|arg| risp_eval(arg, env)).collect();
+                                EvalState::Value(proc(arg_values.as_slice()))
                             }
-                        }
-                        Value::Bool(true) // All were truthy
-                    }
-                    "or" => {
-                        for arg in args {
-                            let evaled = risp_eval(arg, env); // Evaluate one at a time
-                            if is_truthy(&evaled) {
-                                return Value::Bool(true); // Stop immediately on first true
-                            }
-                        }
-                        Value::Bool(false) // All were false
-                    }
-                    "not" => {
-                        if args.len() != 1 {
-                            panic!("not expects 1 argument")
-                        }
-                        return Value::Bool(!is_truthy(&risp_eval(&args[0], env)));
-                    }
-                    "=" => {
-                        if args.len() < 2 {
-                            panic!("= requires at least 2 arguments");
-                        }
-                        let first_val = risp_eval(&args[0], env);
-                        let first_int = match first_val {
-                            Value::Int(n) => n,
-                            _ => panic!("= requires integers"),
-                        };
-
-                        let all_equal = args[1..].iter().all(|arg| {
-                            let val = risp_eval(arg, env);
-                            match val {
-                                Value::Int(n) => n == first_int,
-                                _ => panic!("= requires integers"),
-                            }
-                        });
-                        Value::Bool(all_equal)
-                    }
-                    "<" => {
-                        if args.len() != 2 {
-                            panic!("< requires exactly 2 arguments");
-                        }
-                        let left = risp_eval(&args[0], env);
-                        let right = risp_eval(&args[1], env);
-                        let (left_int, right_int) = match (left, right) {
-                            (Value::Int(l), Value::Int(r)) => (l, r),
-                            _ => panic!("< requires integers"),
-                        };
-                        Value::Bool(left_int < right_int)
-                    }
-                    ">" => {
-                        if args.len() != 2 {
-                            panic!("> requires exactly 2 arguments");
-                        }
-                        let left = risp_eval(&args[0], env);
-                        let right = risp_eval(&args[1], env);
-                        let (left_int, right_int) = match (left, right) {
-                            (Value::Int(l), Value::Int(r)) => (l, r),
-                            _ => panic!("> requires integers"),
-                        };
-                        Value::Bool(left_int > right_int)
-                    }
-
-                    // Step 3: Fix addition - need helper function to extract integers
-                    "+" => {
-                        let sum = args
-                            .iter()
-                            .map(|arg| risp_eval(arg, env)) // Pass env to each call
-                            .map(|val| match val {
-                                // Extract integer from Value
-                                Value::Int(n) => n,
-                                _ => panic!("+ requires integers"),
-                            })
-                            .sum::<i32>();
-                        Value::Int(sum) // Wrap result back in Value::Int
-                    }
-                    "-" => {
-                        if args.is_empty() {
-                            panic!("- requires at least 1 argument");
-                        }
-                        if args.len() == 1 {
-                            // Unary negation
-                            let val = risp_eval(&args[0], env);
-                            match val {
-                                Value::Int(n) => Value::Int(-n),
-                                _ => panic!("- requires integer"),
-                            }
-                        } else {
-                            let first = risp_eval(&args[0], env);
-                            let first_int = match first {
-                                Value::Int(n) => n,
-                                _ => panic!("- requires integers"),
-                            };
-                            let rest_sum = args[1..]
-                                .iter()
-                                .map(|arg| risp_eval(arg, env))
-                                .map(|val| match val {
-                                    Value::Int(n) => n,
-                                    _ => panic!("- requires integers"),
-                                })
-                                .sum::<i32>();
-                            Value::Int(first_int - rest_sum)
-                        }
-                    }
-                    "*" => {
-                        let product = args
-                            .iter()
-                            .map(|arg| risp_eval(arg, env))
-                            .map(|val| match val {
-                                Value::Int(n) => n,
-                                _ => panic!("* requires integers"),
-                            })
-                            .product::<i32>();
-                        Value::Int(product)
-                    }
-                    "/" => {
-                        if args.is_empty() {
-                            panic!("/ requires at least 1 argument");
-                        }
-                        if args.len() == 1 {
-                            // Unary division: reciprocal (/ 8) = 1/8
-                            let val = risp_eval(&args[0], env);
-                            match val {
-                                Value::Int(n) => {
-                                    if n == 0 {
-                                        panic!("Division by zero");
-                                    }
-                                    Value::Int(1 / n) // Note: integer division, so 1/8 = 0
+                            Value::Lambda {
+                                params,
+                                body,
+                                env: captured_env,
+                            } => {
+                                let arg_len = args.len();
+                                if arg_len != params.len() {
+                                    panic!(
+                                        "Lambda expects {} arguments, got {}",
+                                        params.len(),
+                                        arg_len
+                                    );
                                 }
-                                _ => panic!("/ requires integer"),
-                            }
-                        } else {
-                            // N-ary division: (/ 8 2 2) = 8 / 2 / 2 = 2
-                            let first = risp_eval(&args[0], env);
-                            let mut result = match first {
-                                Value::Int(n) => n,
-                                _ => panic!("/ requires integers"),
-                            };
-
-                            for arg in &args[1..] {
-                                let val = risp_eval(arg, env);
-                                let divisor = match val {
-                                    Value::Int(n) => n,
-                                    _ => panic!("/ requires integers"),
-                                };
-                                if divisor == 0 {
-                                    panic!("Division by zero");
+                                let evaled_args: Vec<Value> =
+                                    args.iter().map(|arg| risp_eval(arg, env)).collect();
+                                let child_env = Environment::extend(captured_env);
+                                for (param, arg_value) in params.iter().zip(evaled_args.iter()) {
+                                    child_env.set(param.clone(), arg_value.clone());
                                 }
-                                result = result / divisor;
+                                eval_body(&body, &child_env)
                             }
-                            Value::Int(result)
+                            _ => panic!("Cannot call non-function value: {:?}", value),
+                        },
+                        None => panic!("Unbound variable: {}", name),
+                    },
+                }
+            } else {
+                // Not a symbol - evaluate the function and handle lambda calls
+                let function_value = risp_eval(function, env);
+                match function_value {
+                    Value::Lambda {
+                        params,
+                        body,
+                        env: captured_env,
+                    } => {
+                        // Check arity
+                        if params.len() != args.len() {
+                            panic!(
+                                "Lambda expects {} arguments, got {}",
+                                params.len(),
+                                args.len()
+                            );
                         }
+
+                        // Evaluate all arguments
+                        let arg_values: Vec<Value> =
+                            args.iter().map(|arg| risp_eval(arg, env)).collect();
+
+                        // Create child environment extending the captured environment
+                        let child_env = Environment::extend(captured_env);
+
+                        // Bind parameters to argument values
+                        for (param, arg_value) in params.iter().zip(arg_values.iter()) {
+                            child_env.set(param.clone(), arg_value.clone());
+                        }
+
+                        // Evaluate the lambda body in the child environment (TAIL CALL)
+                        eval_body(&body, &child_env)
                     }
-                    _ => panic!("Unknown function: {}", name),
-                },
-                _ => panic!("First element of list must be a function"),
+                    Value::Proc(proc) => {
+                        // Evaluate all arguments
+                        let arg_values: Vec<Value> =
+                            args.iter().map(|arg| risp_eval(arg, env)).collect();
+
+                        // Call the built-in procedure (DIRECT VALUE)
+                        EvalState::Value(proc(&arg_values))
+                    }
+                    _ => panic!("Cannot call non-function value: {:?}", function_value),
+                }
             }
         }
     }
+}
+
+// Helper function to evaluate multi-expression lambda bodies with TCO
+fn eval_body(exprs: &[Expr], env: &Rc<Environment>) -> EvalState {
+    if exprs.is_empty() {
+        return EvalState::Value(Value::Int(0)); // Default value for empty body
+    }
+
+    // Evaluate all expressions except the last one normally
+    for expr in &exprs[..exprs.len() - 1] {
+        risp_eval(expr, env); // Side effects only, ignore result
+    }
+
+    // Return the last expression as a tail call for TCO
+    EvalState::Continue(exprs[exprs.len() - 1].clone(), Rc::clone(env))
+}
+
+pub fn risp_eval_program(exprs: &[Expr], env: &Rc<Environment>) -> Value {
+    if exprs.is_empty() {
+        return Value::Int(0); // Default value for empty program
+    }
+
+    let mut result = Value::Int(0);
+    for expr in exprs {
+        result = risp_eval(expr, env);
+    }
+    result
 }

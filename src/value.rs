@@ -7,7 +7,7 @@ pub enum Value {
     Bool(bool),
     Lambda {
         params: Vec<String>,
-        body: Expr,
+        body: Vec<Expr>,
         env: Rc<Environment>,
     },
     Proc(Rc<dyn Fn(&[Value]) -> Value>),
@@ -19,8 +19,8 @@ impl std::fmt::Display for Value {
             Value::Int(n) => write!(f, "{}", n),
             Value::Bool(true) => write!(f, "#t"),
             Value::Bool(false) => write!(f, "#f"),
-            Value::Lambda { params, body, env } => write!(f, "<lambda>"),
-            Value::Proc(p) => write!(f, "<proc>"),
+            Value::Lambda { params: _, body: _, env: _ } => write!(f, "<lambda>"),
+            Value::Proc(_p) => write!(f, "<proc>"),
         }
     }
 }
@@ -46,8 +46,8 @@ impl std::fmt::Debug for Value {
             Value::Int(n) => write!(f, "{}", n),
             Value::Bool(true) => write!(f, "#t"),
             Value::Bool(false) => write!(f, "#f"),
-            Value::Lambda { params, body, env } => write!(f, "<lambda>"),
-            Value::Proc(p) => write!(f, "<proc>"),
+            Value::Lambda { params: _, body: _, env: _ } => write!(f, "<lambda>"),
+            Value::Proc(_p) => write!(f, "<proc>"),
         }
     }
 }
@@ -59,17 +59,17 @@ impl PartialEq for Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (
                 Value::Lambda {
-                    params: a_params,
-                    body: a_body,
-                    env: a_env,
+                    params: _a_params,
+                    body: _a_body,
+                    env: _a_env,
                 },
                 Value::Lambda {
-                    params: b_params,
-                    body: b_body,
-                    env: b_env,
+                    params: _b_params,
+                    body: _b_body,
+                    env: _b_env,
                 },
             ) => false,
-            (Value::Proc(a), Value::Proc(b)) => false,
+            (Value::Proc(_a), Value::Proc(_b)) => false,
             _ => false,
         }
     }

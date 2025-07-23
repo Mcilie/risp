@@ -26,7 +26,7 @@ impl Parser {
         self.current_token = self.lexer.next_token();
     }
 
-    pub fn parse(&mut self) -> Expr {
+    pub fn parse_expr(&mut self) -> Expr {
         match &self.current_token {
             Token::Number(n) => {
                 let num = *n;
@@ -52,7 +52,7 @@ impl Parser {
 
                 // Read list elements until ')'
                 while !matches!(self.current_token, Token::RightParen | Token::Eof) {
-                    elements.push(self.parse()); // Recursive!
+                    elements.push(self.parse_expr()); // Recursive!
                 }
 
                 if matches!(self.current_token, Token::RightParen) {
@@ -65,5 +65,15 @@ impl Parser {
             Token::Eof => panic!("Unexpected end of input"),
             _ => panic!("Unexpected token: {:?}", self.current_token),
         }
+    }
+
+    pub fn parse(&mut self) -> Vec<Expr> {
+        let mut expressions = Vec::new();
+
+        while !matches!(self.current_token, Token::Eof) {
+            expressions.push(self.parse_expr());
+        }
+
+        expressions
     }
 }

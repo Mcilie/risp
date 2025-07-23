@@ -13,9 +13,11 @@ use value::Value;
 pub fn eval_expression(input: &str) -> i32 {
     let lexer = Lexer::new(input.to_string());
     let mut parser = Parser::new(lexer);
-    let ast = parser.parse();
+    let asts = parser.parse();
     let env = Environment::new_root(); // Create empty environment
-    let result = risp_eval(&ast, &env);
+
+    // Use eval_program to handle multiple expressions
+    let result = evaluator::risp_eval_program(&asts, &env);
 
     // Extract integer from Value result
     match result {
