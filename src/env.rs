@@ -261,6 +261,33 @@ impl Environment {
         }));
         new_env.set("not".to_string(), not_proc);
 
+        // Add the write built-in procedure
+        let write_proc = Value::Proc(Rc::new(|args: &[Value]| -> Result<Value, RispError> {
+            if args.is_empty() {
+                return Err(RispError::InvalidArithmetic(
+                    "write expects at least 1 argument".to_string(),
+                ));
+            }
+
+            // Print each argument separated by spaces
+            for (i, arg) in args.iter().enumerate() {
+                if i > 0 {
+                    print!(" ");
+                }
+                match arg {
+                    Value::Int(n) => print!("{}", n),
+                    Value::Bool(b) => print!("{}", if *b { "#t" } else { "#f" }),
+                    Value::Lambda { .. } => print!("<lambda>"),
+                    Value::Proc(_) => print!("<proc>"),
+                }
+            }
+            println!(); // Add newline at the end
+
+            // Return the last argument (or first if only one)
+            Ok(args[args.len() - 1].clone())
+        }));
+        new_env.set("write".to_string(), write_proc);
+
         new_env
     }
 

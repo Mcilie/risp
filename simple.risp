@@ -1,0 +1,7 @@
+(define (square x) (* x x))
+
+(write (+ 1 2 3))
+(write (square 7))
+(write (and #t (> 10 5)))
+
+(* (square 6) 2) 

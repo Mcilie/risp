@@ -202,9 +202,18 @@ mod boolean_tests {
 
     #[test]
     fn test_complex_boolean_expressions() {
-        assert_eq!(eval_full("(and (> 5 3) (< 2 4))").unwrap(), Value::Bool(true));
-        assert_eq!(eval_full("(and (> 5 3) (< 4 2))").unwrap(), Value::Bool(false));
-        assert_eq!(eval_full("(or (= 1 2) (> 5 3))").unwrap(), Value::Bool(true));
+        assert_eq!(
+            eval_full("(and (> 5 3) (< 2 4))").unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            eval_full("(and (> 5 3) (< 4 2))").unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            eval_full("(or (= 1 2) (> 5 3))").unwrap(),
+            Value::Bool(true)
+        );
         assert_eq!(eval_full("(not (= 5 3))").unwrap(), Value::Bool(true));
         assert_eq!(eval_full("(not (= 5 5))").unwrap(), Value::Bool(false));
     }
@@ -221,7 +230,7 @@ mod variable_tests {
         let mut parser = Parser::new(lexer).unwrap();
         let asts = parser.parse().unwrap();
         let env = Environment::new_root();
-        
+
         // Evaluate define statement
         for expr in &asts {
             evaluator::risp_eval(expr, &env).unwrap();
@@ -261,7 +270,10 @@ mod conditional_tests {
 
     #[test]
     fn test_nested_conditionals() {
-        assert_eq!(eval_full("(if (> 5 3) (if #t 42 0) 99)").unwrap(), Value::Int(42));
+        assert_eq!(
+            eval_full("(if (> 5 3) (if #t 42 0) 99)").unwrap(),
+            Value::Int(42)
+        );
         assert_eq!(
             eval_full("(if (< 5 3) 100 (if #t 200 300))").unwrap(),
             Value::Int(200)
@@ -277,19 +289,22 @@ mod conditional_tests {
 }
 
 // Helper function for closure tests
-fn eval_program_in_env(statements: &[&str], env: &std::rc::Rc<Environment>) -> Result<Value, risp::error::RispError> {
+fn eval_program_in_env(
+    statements: &[&str],
+    env: &std::rc::Rc<Environment>,
+) -> Result<Value, risp::error::RispError> {
     let mut result = Value::Bool(false);
-    
+
     for statement in statements {
         let lexer = Lexer::new(statement.to_string());
         let mut parser = Parser::new(lexer)?;
         let asts = parser.parse()?;
-        
+
         for expr in &asts {
             result = evaluator::risp_eval(expr, env)?;
         }
     }
-    
+
     Ok(result)
 }
 
@@ -300,11 +315,20 @@ mod closure_semantics_tests {
     #[test]
     fn test_simple_lambda_call() {
         // Step 7.1: Simple lambda call - ((lambda (x) (+ x 1)) 41) => 42
-        assert_eq!(eval_full("((lambda (x) (+ x 1)) 41)").unwrap(), Value::Int(42));
+        assert_eq!(
+            eval_full("((lambda (x) (+ x 1)) 41)").unwrap(),
+            Value::Int(42)
+        );
 
         // Additional simple cases
-        assert_eq!(eval_full("((lambda (x) (* x 2)) 6)").unwrap(), Value::Int(12));
-        assert_eq!(eval_full("((lambda (a b) (+ a b)) 10 20)").unwrap(), Value::Int(30));
+        assert_eq!(
+            eval_full("((lambda (x) (* x 2)) 6)").unwrap(),
+            Value::Int(12)
+        );
+        assert_eq!(
+            eval_full("((lambda (a b) (+ a b)) 10 20)").unwrap(),
+            Value::Int(30)
+        );
         assert_eq!(eval_full("((lambda () 42))").unwrap(), Value::Int(42));
     }
 
@@ -317,7 +341,7 @@ mod closure_semantics_tests {
             "(define make-adder (lambda (k) (lambda (x) (+ x k))))",
             "(define add5 (make-adder 5))",
         ];
-        
+
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test add5
@@ -344,9 +368,7 @@ mod closure_semantics_tests {
         let env = Environment::new_root();
 
         // Define factorial function
-        let statements = vec![
-            "(define fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))"
-        ];
+        let statements = vec!["(define fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))"];
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test factorial cases
@@ -393,9 +415,7 @@ mod closure_semantics_tests {
         // Test that function definition sugar works with recursion
         let env = Environment::new_root();
 
-        let statements = vec![
-            "(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))"
-        ];
+        let statements = vec!["(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))"];
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test fibonacci sequence
@@ -428,9 +448,7 @@ mod tail_call_optimization_tests {
         // Test that factorial works with deeper recursion without stack overflow
         let env = Environment::new_root();
 
-        let statements = vec![
-            "(define fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))"
-        ];
+        let statements = vec!["(define fact (lambda (n) (if (= n 0) 1 (* n (fact (- n 1))))))"];
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test larger factorial values that would cause stack overflow without TCO
@@ -450,9 +468,7 @@ mod tail_call_optimization_tests {
         // Test that fibonacci works with deeper recursion
         let env = Environment::new_root();
 
-        let statements = vec![
-            "(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))"
-        ];
+        let statements = vec!["(define (fib n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))"];
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test fibonacci values that would be slow but shouldn't stack overflow
@@ -472,9 +488,7 @@ mod tail_call_optimization_tests {
         // Test a simple tail-recursive function
         let env = Environment::new_root();
 
-        let statements = vec![
-            "(define (countdown n) (if (= n 0) 0 (countdown (- n 1))))"
-        ];
+        let statements = vec!["(define (countdown n) (if (= n 0) 0 (countdown (- n 1))))"];
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test with larger values that would cause stack overflow without TCO
@@ -523,9 +537,8 @@ mod tail_call_optimization_tests {
         // Test that nested lambda calls work with TCO
         let env = Environment::new_root();
 
-        let statements = vec![
-            "(define (deep-call n) (if (= n 0) 42 ((lambda (x) (deep-call (- x 1))) n)))"
-        ];
+        let statements =
+            vec!["(define (deep-call n) (if (= n 0) 42 ((lambda (x) (deep-call (- x 1))) n)))"];
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test with depth that would cause stack overflow without TCO
@@ -545,9 +558,8 @@ mod tail_call_optimization_tests {
         // Test that both if branches use tail calls correctly
         let env = Environment::new_root();
 
-        let statements = vec![
-            "(define (even-odd n) (if (= n 0) 1 (if (= n 1) 0 (even-odd (- n 2)))))"
-        ];
+        let statements =
+            vec!["(define (even-odd n) (if (= n 0) 1 (if (= n 1) 0 (even-odd (- n 2)))))"];
         eval_program_in_env(&statements, &env).unwrap();
 
         // Test with values that exercise both branches

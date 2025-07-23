@@ -1,0 +1,44 @@
+(define (fact n) 
+  (if (= n 0) 
+      1 
+      (* n (fact (- n 1)))))
+
+(write (fact 5))
+(write (fact 10))
+
+(define (fib n) 
+  (if (< n 2) 
+      n 
+      (+ (fib (- n 1)) (fib (- n 2)))))
+
+(write (fib 0) (fib 1) (fib 2) (fib 3) (fib 4) (fib 5) (fib 6) (fib 7) (fib 8))
+
+(define make-multiplier (lambda (m) (lambda (x) (* x m))))
+(define double (make-multiplier 2))
+(define triple (make-multiplier 3))
+
+(write (double 21))
+(write (triple 14))
+
+(define make-adder (lambda (k) (lambda (x) (+ x k))))
+(define add5 (make-adder 5))
+(define add10 (make-adder 10))
+
+(write (add5 37))
+(write (add10 32))
+
+(write (and #t #t))
+(write (or #f #t))
+(write (not #f))
+
+(define (outer x)
+  (define (inner y) (+ x y))
+  (inner 10))
+
+(write (outer 15))
+
+(define x 100)
+(define y 200)
+(write (+ (* x 2) (/ y 4)))
+
+(+ (fact 6) (fib 10)) 

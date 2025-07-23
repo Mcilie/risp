@@ -17,7 +17,7 @@ fn eval_full(input: &str) -> Result<Value, risp::error::RispError> {
     let mut parser = Parser::new(lexer)?;
     let asts = parser.parse()?;
     let env = Environment::new_root();
-    
+
     // Evaluate all expressions, returning the last one
     if asts.is_empty() {
         return Ok(Value::Bool(false));
@@ -40,19 +40,22 @@ fn format_bool(b: bool) -> String {
 }
 
 // Helper function for closure tests
-fn eval_program_in_env(statements: &[&str], env: &std::rc::Rc<Environment>) -> Result<Value, risp::error::RispError> {
+fn eval_program_in_env(
+    statements: &[&str],
+    env: &std::rc::Rc<Environment>,
+) -> Result<Value, risp::error::RispError> {
     let mut result = Value::Bool(false);
-    
+
     for statement in statements {
         let lexer = Lexer::new(statement.to_string());
         let mut parser = Parser::new(lexer)?;
         let asts = parser.parse()?;
-        
+
         for expr in &asts {
             result = evaluator::risp_eval(expr, env)?;
         }
     }
-    
+
     Ok(result)
 }
 

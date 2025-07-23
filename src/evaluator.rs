@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::{env::Environment, parser::Expr, value::Value, error::RispError};
+use crate::{env::Environment, error::RispError, parser::Expr, value::Value};
 
 pub enum EvalState {
     Value(Value),                    // Final result - we're done
@@ -45,25 +45,37 @@ pub fn risp_eval_step(expr: &Expr, env: &Rc<Environment>) -> EvalState {
             match &elements[0] {
                 Expr::Symbol(s) if s == "define" => {
                     if elements.len() < 3 {
-                        return EvalState::Error(RispError::InvalidDefine("Define needs var name and at least one body expression".to_string()));
+                        return EvalState::Error(RispError::InvalidDefine(
+                            "Define needs var name and at least one body expression".to_string(),
+                        ));
                     }
 
                     match &elements[1] {
                         Expr::List(signature) => {
                             // Function definition: (define (foo x y) body...)
                             if signature.is_empty() {
-                                return EvalState::Error(RispError::InvalidDefine("First arg must be symbol".to_string()));
+                                return EvalState::Error(RispError::InvalidDefine(
+                                    "First arg must be symbol".to_string(),
+                                ));
                             }
                             let func_name = match &signature[0] {
                                 Expr::Symbol(name) => name.clone(),
-                                _ => return EvalState::Error(RispError::InvalidDefine("First arg must be symbol".to_string())),
+                                _ => {
+                                    return EvalState::Error(RispError::InvalidDefine(
+                                        "First arg must be symbol".to_string(),
+                                    ))
+                                }
                             };
 
                             let mut params = Vec::new();
                             for param in &signature[1..] {
                                 match param {
                                     Expr::Symbol(param_name) => params.push(param_name.clone()),
-                                    _ => return EvalState::Error(RispError::InvalidDefine("Params must be symbols".to_string())),
+                                    _ => {
+                                        return EvalState::Error(RispError::InvalidDefine(
+                                            "Params must be symbols".to_string(),
+                                        ))
+                                    }
                                 }
                             }
 
@@ -88,12 +100,16 @@ pub fn risp_eval_step(expr: &Expr, env: &Rc<Environment>) -> EvalState {
                                 Err(e) => EvalState::Error(e),
                             }
                         }
-                        _ => EvalState::Error(RispError::InvalidDefine("First arg must be symbol or list".to_string())),
+                        _ => EvalState::Error(RispError::InvalidDefine(
+                            "First arg must be symbol or list".to_string(),
+                        )),
                     }
                 }
                 Expr::Symbol(s) if s == "lambda" => {
                     if elements.len() < 3 {
-                        return EvalState::Error(RispError::InvalidLambda("Lambda needs parameters and at least one body expression".to_string()));
+                        return EvalState::Error(RispError::InvalidLambda(
+                            "Lambda needs parameters and at least one body expression".to_string(),
+                        ));
                     }
 
                     let params = match &elements[1] {
@@ -102,12 +118,20 @@ pub fn risp_eval_step(expr: &Expr, env: &Rc<Environment>) -> EvalState {
                             for param in param_list {
                                 match param {
                                     Expr::Symbol(param_name) => params.push(param_name.clone()),
-                                    _ => return EvalState::Error(RispError::InvalidLambda("Lambda parameters must be symbols".to_string())),
+                                    _ => {
+                                        return EvalState::Error(RispError::InvalidLambda(
+                                            "Lambda parameters must be symbols".to_string(),
+                                        ))
+                                    }
                                 }
                             }
                             params
                         }
-                        _ => return EvalState::Error(RispError::InvalidLambda("First argument to lambda must be a list".to_string())),
+                        _ => {
+                            return EvalState::Error(RispError::InvalidLambda(
+                                "First argument to lambda must be a list".to_string(),
+                            ))
+                        }
                     };
 
                     let body = elements[2..].to_vec();
@@ -120,7 +144,9 @@ pub fn risp_eval_step(expr: &Expr, env: &Rc<Environment>) -> EvalState {
                 }
                 Expr::Symbol(s) if s == "if" => {
                     if elements.len() != 3 && elements.len() != 4 {
-                        return EvalState::Error(RispError::InvalidIf("if requires 2 or 3 arguments".to_string()));
+                        return EvalState::Error(RispError::InvalidIf(
+                            "if requires 2 or 3 arguments".to_string(),
+                        ));
                     }
 
                     let condition = match risp_eval(&elements[1], env) {
@@ -191,7 +217,10 @@ pub fn risp_eval_step(expr: &Expr, env: &Rc<Environment>) -> EvalState {
                             // Evaluate function body with TCO
                             eval_body_tco(&body, &call_env)
                         }
-                        _ => EvalState::Error(RispError::NotCallable(format!("{:?}", function_value))),
+                        _ => EvalState::Error(RispError::NotCallable(format!(
+                            "{:?}",
+                            function_value
+                        ))),
                     }
                 }
             }
@@ -223,7 +252,7 @@ fn eval_body_tco(exprs: &[Expr], env: &Rc<Environment>) -> EvalState {
     // Evaluate all but the last expression for side effects
     for expr in &exprs[..exprs.len() - 1] {
         match risp_eval(expr, env) {
-            Ok(_) => {}, // Ignore result, just check for errors
+            Ok(_) => {} // Ignore result, just check for errors
             Err(e) => return EvalState::Error(e),
         }
     }

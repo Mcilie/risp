@@ -23,14 +23,19 @@ pub fn eval_expression(input: &str) -> Result<i64, RispError> {
     // Extract integer from Value result
     match result {
         Value::Int(n) => Ok(n),
-        Value::Bool(_) => Err(RispError::CannotConvertToInteger("boolean result".to_string())),
+        Value::Bool(_) => Err(RispError::CannotConvertToInteger(
+            "boolean result".to_string(),
+        )),
         Value::Lambda { .. } => Err(RispError::CannotConvertToInteger("lambda".to_string())),
         Value::Proc(_) => Err(RispError::CannotConvertToInteger("procedure".to_string())),
     }
 }
 
 // Helper function to evaluate a program (multiple expressions)
-fn eval_program(exprs: &[parser::Expr], env: &std::rc::Rc<Environment>) -> Result<Value, RispError> {
+fn eval_program(
+    exprs: &[parser::Expr],
+    env: &std::rc::Rc<Environment>,
+) -> Result<Value, RispError> {
     if exprs.is_empty() {
         return Ok(Value::Bool(false)); // Empty program returns false
     }
