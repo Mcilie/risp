@@ -3,7 +3,7 @@ use crate::parser::Expr;
 use std::rc::Rc;
 
 pub enum Value {
-    Int(i32),
+    Int(i64),
     Bool(bool),
     Lambda {
         params: Vec<String>,
@@ -19,7 +19,11 @@ impl std::fmt::Display for Value {
             Value::Int(n) => write!(f, "{}", n),
             Value::Bool(true) => write!(f, "#t"),
             Value::Bool(false) => write!(f, "#f"),
-            Value::Lambda { params: _, body: _, env: _ } => write!(f, "<lambda>"),
+            Value::Lambda {
+                params: _,
+                body: _,
+                env: _,
+            } => write!(f, "<lambda>"),
             Value::Proc(_p) => write!(f, "<proc>"),
         }
     }
@@ -46,7 +50,11 @@ impl std::fmt::Debug for Value {
             Value::Int(n) => write!(f, "{}", n),
             Value::Bool(true) => write!(f, "#t"),
             Value::Bool(false) => write!(f, "#f"),
-            Value::Lambda { params: _, body: _, env: _ } => write!(f, "<lambda>"),
+            Value::Lambda {
+                params: _,
+                body: _,
+                env: _,
+            } => write!(f, "<lambda>"),
             Value::Proc(_p) => write!(f, "<proc>"),
         }
     }

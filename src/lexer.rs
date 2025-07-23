@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub enum Token {
-    Number(i32),
+    Number(i64),
     Symbol(String),
     LeftParen,
     RightParen,
@@ -58,7 +58,7 @@ impl Lexer {
         result
     }
 
-    fn read_number(&mut self) -> i32 {
+    fn read_number(&mut self) -> i64 {
         let mut result = String::new();
         while let Some(ch) = self.curr_char {
             if ch.is_ascii_digit() {
@@ -68,7 +68,7 @@ impl Lexer {
                 break;
             }
         }
-        result.parse::<i32>().unwrap()
+        result.parse::<i64>().unwrap()
     }
 
     pub fn next_token(&mut self) -> Token {

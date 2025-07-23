@@ -3,7 +3,7 @@ use risp::eval_expression;
 use risp::{env::Environment, evaluator, lexer::Lexer, parser::Parser, value::Value};
 
 // Helper function to format numbers correctly for Lisp
-fn format_number(n: i32) -> String {
+fn format_number(n: i64) -> String {
     if n < 0 {
         format!("(- {})", -n)
     } else {
@@ -32,35 +32,35 @@ fn format_bool(b: bool) -> String {
 proptest! {
     // Existing arithmetic property tests
     #[test]
-    fn test_addition_commutativity(a in -100..100i32, b in -100..100i32) {
+    fn test_addition_commutativity(a in -100..100i64, b in -100..100i64) {
         let expr1 = format!("(+ {} {})", format_number(a), format_number(b));
         let expr2 = format!("(+ {} {})", format_number(b), format_number(a));
         prop_assert_eq!(eval_expression(&expr1), eval_expression(&expr2));
     }
 
     #[test]
-    fn test_multiplication_commutativity(a in -50..50i32, b in -50..50i32) {
+    fn test_multiplication_commutativity(a in -50..50i64, b in -50..50i64) {
         let expr1 = format!("(* {} {})", format_number(a), format_number(b));
         let expr2 = format!("(* {} {})", format_number(b), format_number(a));
         prop_assert_eq!(eval_expression(&expr1), eval_expression(&expr2));
     }
 
     #[test]
-    fn test_addition_associativity(a in -50..50i32, b in -50..50i32, c in -50..50i32) {
+    fn test_addition_associativity(a in -50..50i64, b in -50..50i64, c in -50..50i64) {
         let expr1 = format!("(+ (+ {} {}) {})", format_number(a), format_number(b), format_number(c));
         let expr2 = format!("(+ {} (+ {} {}))", format_number(a), format_number(b), format_number(c));
         prop_assert_eq!(eval_expression(&expr1), eval_expression(&expr2));
     }
 
     #[test]
-    fn test_multiplication_associativity(a in -10..10i32, b in -10..10i32, c in -10..10i32) {
+    fn test_multiplication_associativity(a in -10..10i64, b in -10..10i64, c in -10..10i64) {
         let expr1 = format!("(* (* {} {}) {})", format_number(a), format_number(b), format_number(c));
         let expr2 = format!("(* {} (* {} {}))", format_number(a), format_number(b), format_number(c));
         prop_assert_eq!(eval_expression(&expr1), eval_expression(&expr2));
     }
 
     #[test]
-    fn test_additive_identity(a in -100..100i32) {
+    fn test_additive_identity(a in -100..100i64) {
         let expr1 = format!("(+ {} 0)", format_number(a));
         let expr2 = format!("(+ 0 {})", format_number(a));
         prop_assert_eq!(eval_expression(&expr1), a);
@@ -68,7 +68,7 @@ proptest! {
     }
 
     #[test]
-    fn test_multiplicative_identity(a in -100..100i32) {
+    fn test_multiplicative_identity(a in -100..100i64) {
         let expr1 = format!("(* {} 1)", format_number(a));
         let expr2 = format!("(* 1 {})", format_number(a));
         prop_assert_eq!(eval_expression(&expr1), a);
@@ -76,32 +76,32 @@ proptest! {
     }
 
     #[test]
-    fn test_subtraction_identity(a in -100..100i32) {
+    fn test_subtraction_identity(a in -100..100i64) {
         let expr = format!("(- {} 0)", format_number(a));
         prop_assert_eq!(eval_expression(&expr), a);
     }
 
     #[test]
-    fn test_self_subtraction(a in -100..100i32) {
+    fn test_self_subtraction(a in -100..100i64) {
         let expr = format!("(- {} {})", format_number(a), format_number(a));
         prop_assert_eq!(eval_expression(&expr), 0);
     }
 
     #[test]
-    fn test_self_division(a in -100..100i32) {
+    fn test_self_division(a in -100..100i64) {
         prop_assume!(a != 0);
         let expr = format!("(/ {} {})", format_number(a), format_number(a));
         prop_assert_eq!(eval_expression(&expr), 1);
     }
 
     #[test]
-    fn test_double_negation(a in -100..100i32) {
+    fn test_double_negation(a in -100..100i64) {
         let expr = format!("(- (- {}))", format_number(a));
         prop_assert_eq!(eval_expression(&expr), a);
     }
 
     #[test]
-    fn test_distributivity(a in -10..10i32, b in -10..10i32, c in -10..10i32) {
+    fn test_distributivity(a in -10..10i64, b in -10..10i64, c in -10..10i64) {
         let expr1 = format!("(* {} (+ {} {}))", format_number(a), format_number(b), format_number(c));
         let expr2 = format!("(+ (* {} {}) (* {} {}))", format_number(a), format_number(b), format_number(a), format_number(c));
         prop_assert_eq!(eval_expression(&expr1), eval_expression(&expr2));
@@ -176,20 +176,20 @@ proptest! {
 
     // Comparison properties
     #[test]
-    fn test_equality_reflexivity(a in -100..100i32) {
+    fn test_equality_reflexivity(a in -100..100i64) {
         let expr = format!("(= {} {})", format_number(a), format_number(a));
         prop_assert_eq!(eval_full(&expr), Value::Bool(true));
     }
 
     #[test]
-    fn test_equality_symmetry(a in -100..100i32, b in -100..100i32) {
+    fn test_equality_symmetry(a in -100..100i64, b in -100..100i64) {
         let expr1 = format!("(= {} {})", format_number(a), format_number(b));
         let expr2 = format!("(= {} {})", format_number(b), format_number(a));
         prop_assert_eq!(eval_full(&expr1), eval_full(&expr2));
     }
 
     #[test]
-    fn test_less_than_antisymmetry(a in -100..100i32, b in -100..100i32) {
+    fn test_less_than_antisymmetry(a in -100..100i64, b in -100..100i64) {
         // If a < b, then not (b < a)
         let expr1 = format!("(< {} {})", format_number(a), format_number(b));
         let expr2 = format!("(< {} {})", format_number(b), format_number(a));
@@ -203,7 +203,7 @@ proptest! {
     }
 
     #[test]
-    fn test_greater_than_antisymmetry(a in -100..100i32, b in -100..100i32) {
+    fn test_greater_than_antisymmetry(a in -100..100i64, b in -100..100i64) {
         // If a > b, then not (b > a)
         let expr1 = format!("(> {} {})", format_number(a), format_number(b));
         let expr2 = format!("(> {} {})", format_number(b), format_number(a));
@@ -218,19 +218,19 @@ proptest! {
 
     // If statement properties
     #[test]
-    fn test_if_true_branch(a in -100..100i32, b in -100..100i32) {
+    fn test_if_true_branch(a in -100..100i64, b in -100..100i64) {
         let expr = format!("(if #t {} {})", format_number(a), format_number(b));
         prop_assert_eq!(eval_full(&expr), Value::Int(a));
     }
 
     #[test]
-    fn test_if_false_branch(a in -100..100i32, b in -100..100i32) {
+    fn test_if_false_branch(a in -100..100i64, b in -100..100i64) {
         let expr = format!("(if #f {} {})", format_number(a), format_number(b));
         prop_assert_eq!(eval_full(&expr), Value::Int(b));
     }
 
     #[test]
-    fn test_if_boolean_condition(a: bool, b in -100..100i32, c in -100..100i32) {
+    fn test_if_boolean_condition(a: bool, b in -100..100i64, c in -100..100i64) {
         let expr = format!("(if {} {} {})", format_bool(a), format_number(b), format_number(c));
         let expected = if a { Value::Int(b) } else { Value::Int(c) };
         prop_assert_eq!(eval_full(&expr), expected);
@@ -238,7 +238,7 @@ proptest! {
 
     // Truthiness properties (everything except #f is truthy)
     #[test]
-    fn test_number_truthiness(n in -100..100i32) {
+    fn test_number_truthiness(n in -100..100i64) {
         // All numbers (including 0) are truthy
         let expr = format!("(if {} 1 0)", format_number(n));
         prop_assert_eq!(eval_full(&expr), Value::Int(1));
@@ -253,14 +253,14 @@ proptest! {
 
     // Mixed boolean-arithmetic properties
     #[test]
-    fn test_comparison_with_arithmetic(a in -50..50i32, b in -50..50i32) {
+    fn test_comparison_with_arithmetic(a in -50..50i64, b in -50..50i64) {
         // (= (+ a b) (+ b a)) should always be true (commutativity)
         let expr = format!("(= (+ {} {}) (+ {} {}))", format_number(a), format_number(b), format_number(b), format_number(a));
         prop_assert_eq!(eval_full(&expr), Value::Bool(true));
     }
 
     #[test]
-    fn test_conditional_arithmetic(a in -20..20i32, b in -20..20i32, c in -20..20i32) {
+    fn test_conditional_arithmetic(a in -20..20i64, b in -20..20i64, c in -20..20i64) {
         // Test that arithmetic works correctly inside conditionals
         let condition = a > b;
         let expr = format!("(if {} {} {})", format_bool(condition), format_number(a + c), format_number(b + c));
@@ -286,9 +286,9 @@ proptest! {
     // Test that parsing never panics on well-formed expressions
     #[test]
     fn test_parsing_robustness_with_booleans(
-        a in -50..50i32,
-        b in 1..50i32,  // Avoid division by zero
-        c in -50..50i32,
+        a in -50..50i64,
+        b in 1..50i64,  // Avoid division by zero
+        c in -50..50i64,
         bool_a: bool,
         bool_b: bool
     ) {
@@ -309,21 +309,21 @@ proptest! {
 
     // NEW: Closure and Lambda Property Tests
     #[test]
-    fn test_identity_function_property(x in -100..100i32) {
+    fn test_identity_function_property(x in -100..100i64) {
         // The identity function (lambda (x) x) should return its input unchanged
         let expr = format!("((lambda (x) x) {})", format_number(x));
         prop_assert_eq!(eval_full(&expr), Value::Int(x));
     }
 
     #[test]
-    fn test_constant_function_property(k in -50..50i32, x in -100..100i32) {
+    fn test_constant_function_property(k in -50..50i64, x in -100..100i64) {
         // A constant function (lambda (x) k) should always return k regardless of x
         let expr = format!("((lambda (x) {}) {})", format_number(k), format_number(x));
         prop_assert_eq!(eval_full(&expr), Value::Int(k));
     }
 
     #[test]
-    fn test_closure_capture_consistency(k in -20..20i32, x in -50..50i32) {
+    fn test_closure_capture_consistency(k in -20..20i64, x in -50..50i64) {
         // Closures should capture and use variables consistently
         // (define make-adder (lambda (k) (lambda (x) (+ x k))))
         // (define adder (make-adder k))
@@ -355,7 +355,7 @@ proptest! {
     }
 
     #[test]
-    fn test_function_composition_property(a in -10..10i32, b in -10..10i32, x in -20..20i32) {
+    fn test_function_composition_property(a in -10..10i64, b in -10..10i64, x in -20..20i64) {
         // Test that function composition works correctly
         // (define f (lambda (x) (+ x a)))
         // (define g (lambda (x) (* x b)))
@@ -407,16 +407,16 @@ proptest! {
         let result = risp::evaluator::risp_eval_program(&asts, &env);
 
         // Calculate expected factorial
-        let mut expected = 1i32;
+        let mut expected = 1i64;
         for i in 1..=n {
-            expected *= i as i32;
+            expected *= i as i64;
         }
 
         prop_assert_eq!(result, Value::Int(expected));
     }
 
     #[test]
-    fn test_higher_order_function_consistency(multiplier in 1..10i32, x in -20..20i32) {
+    fn test_higher_order_function_consistency(multiplier in 1..10i64, x in -20..20i64) {
         // Test that higher-order functions behave consistently
         // Multiple calls to the same factory should produce equivalent functions
 
@@ -460,7 +460,7 @@ proptest! {
     }
 
     #[test]
-    fn test_lambda_parameter_independence(a in -30..30i32, b in -30..30i32) {
+    fn test_lambda_parameter_independence(a in -30..30i64, b in -30..30i64) {
         // Test that lambda parameters don't interfere with each other
         // (lambda (x y) (+ x y)) should work correctly with different argument combinations
 
@@ -475,7 +475,7 @@ proptest! {
     }
 
     #[test]
-    fn test_nested_lambda_scoping(outer in -15..15i32, inner in -15..15i32, x in -10..10i32) {
+    fn test_nested_lambda_scoping(outer in -15..15i64, inner in -15..15i64, x in -10..10i64) {
         // Test that nested lambdas maintain proper scoping
         // ((lambda (a) (lambda (b) (+ a b))) outer inner) should equal outer + inner
 
@@ -486,7 +486,7 @@ proptest! {
     }
 
     #[test]
-    fn test_recursive_function_base_case_property(base_value in -20..20i32) {
+    fn test_recursive_function_base_case_property(base_value in -20..20i64) {
         // Test that recursive functions handle base cases correctly
         // A simple recursive function that should terminate immediately
 
@@ -535,9 +535,9 @@ proptest! {
             expected *= i as i64;
         }
 
-        // Only test if the result fits in i32 to avoid overflow
-        if expected <= i32::MAX as i64 {
-            prop_assert_eq!(result, Value::Int(expected as i32));
+        // Only test if the result fits in i64 to avoid overflow
+        if expected <= i64::MAX as i64 {
+            prop_assert_eq!(result, Value::Int(expected as i64));
         }
     }
 
@@ -583,7 +583,7 @@ proptest! {
         let result = risp::evaluator::risp_eval_program(&asts, &env);
 
         // Expected: n * (n + 1) / 2 (arithmetic series formula)
-        let expected = (n * (n + 1) / 2) as i32;
+        let expected = (n * (n + 1) / 2) as i64;
         prop_assert_eq!(result, Value::Int(expected));
     }
 
@@ -695,7 +695,7 @@ proptest! {
         prop_assert_eq!(recursive_result, tail_result.clone());
 
         // And both should match the mathematical formula
-        let expected = (n * (n + 1) / 2) as i32;
+        let expected = (n * (n + 1) / 2) as i64;
         prop_assert_eq!(tail_result, Value::Int(expected));
     }
 }

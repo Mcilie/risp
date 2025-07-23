@@ -38,7 +38,7 @@ impl Environment {
                     Value::Int(n) => *n,
                     _ => panic!("+ requires integers"),
                 })
-                .sum::<i32>();
+                .sum::<i64>();
             Value::Int(sum)
         }));
         new_env.set("+".to_string(), plus_proc);
@@ -62,10 +62,10 @@ impl Environment {
                 let rest_sum = args[1..]
                     .iter()
                     .map(|arg| match arg {
-                        Value::Int(n) => n,
+                        Value::Int(n) => *n,
                         _ => panic!("- requires integers"),
                     })
-                    .sum::<i32>();
+                    .sum::<i64>();
                 Value::Int(first - rest_sum)
             }
         }));
@@ -79,7 +79,7 @@ impl Environment {
                     Value::Int(n) => *n,
                     _ => panic!("* requires integers"),
                 })
-                .product::<i32>();
+                .product::<i64>();
             Value::Int(product)
         }));
         new_env.set("*".to_string(), mult_proc);

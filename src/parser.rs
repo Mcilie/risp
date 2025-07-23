@@ -2,7 +2,7 @@ use crate::lexer::{Lexer, Token};
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Number(i32),
+    Number(i64),
     Symbol(String),  // +, -, foo, bar
     List(Vec<Expr>), // (+ 1 2), (foo bar baz)
     Boolean(bool),

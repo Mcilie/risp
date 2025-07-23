@@ -8,9 +8,7 @@ use env::Environment;
 use evaluator::risp_eval;
 use lexer::Lexer;
 use parser::Parser;
-use risp::eval_expression;
 use std::rc::Rc;
-use value::Value;
 
 fn test_expression(input: &str, env: &Rc<Environment>) {
     let lexer = Lexer::new(input.to_string());

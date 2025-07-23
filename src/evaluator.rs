@@ -1,4 +1,3 @@
-use std::io::IsTerminal;
 use std::rc::Rc;
 
 use crate::{env::Environment, parser::Expr, value::Value};

@@ -1,6 +1,5 @@
 use risp::eval_expression;
 use risp::{env::Environment, evaluator, lexer::Lexer, parser::Parser, value::Value};
-use std::rc::Rc;
 
 // Helper function to test expressions that might return booleans
 fn eval_full(input: &str) -> Value {

@@ -5,12 +5,11 @@ pub mod parser;
 pub mod value;
 
 use env::Environment;
-use evaluator::risp_eval;
 use lexer::Lexer;
 use parser::Parser;
 use value::Value;
 
-pub fn eval_expression(input: &str) -> i32 {
+pub fn eval_expression(input: &str) -> i64 {
     let lexer = Lexer::new(input.to_string());
     let mut parser = Parser::new(lexer);
     let asts = parser.parse();
